@@ -1,4 +1,5 @@
 import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
 const root = new URL("../", import.meta.url).pathname;
@@ -43,9 +44,12 @@ const shell = adminOnly
       )
       .replace(/^\s*<meta property="og:image".*\n/m, "")
       .replace(/^\s*<link rel="preload".*\n/m, "")
-      .replace(/^\s*<script defer src="\{\{BASE\}\}\/assets\/site\.js.*\n/m, "")
-      .replace(/^\s*<script defer src="\{\{BASE\}\}\/assets\/public-v3\.js.*\n/m, '  <script defer src="{{BASE}}/assets/admin-v3.js?v=20260816-10"></script>\n')
+      .replace(/^\s*<script defer src="\{\{BASE\}\}\/assets\/public-v3\.js.*\n/m, '  <script defer src="{{BASE}}/assets/admin-v3.js?v=20260816-11"></script>\n')
   : sourceShell;
+
+if (!adminOnly && /assets\/site\.js/.test(shell)) {
+  throw new Error("Legacy site.js must not be included in the public deployment.");
+}
 
 for (const [path, route, title] of routes) {
   const folder = join(output, path);
@@ -63,15 +67,17 @@ css += `\n${await readFile(join(source, "static.css"), "utf8")}`;
 css += `\n${await readFile(join(source, "v3.css"), "utf8")}`;
 await writeFile(join(output, "assets/site.css"), css);
 
-if (adminOnly) {
-  await cp(join(source, "admin-v3.js"), join(output, "assets/admin-v3.js"));
-} else {
-  await cp(join(source, "site.js"), join(output, "assets/site.js"));
-  await cp(join(source, "public-v3.js"), join(output, "assets/public-v3.js"));
+const scriptName = adminOnly ? "admin-v3.js" : "public-v3.js";
+const scriptTarget = join(output, "assets", scriptName);
+await cp(join(source, scriptName), scriptTarget);
+execFileSync(process.execPath, ["--check", scriptTarget], { stdio: "inherit" });
+
+if (!adminOnly) {
   await cp(join(root, "public/images"), join(output, "images"), { recursive: true });
 }
 await cp(join(root, "public/favicon.svg"), join(output, "favicon.svg"));
 await writeFile(join(output, ".nojekyll"), "");
+await writeFile(join(output, "robots.txt"), adminOnly ? "User-agent: *\nDisallow: /\n" : "User-agent: *\nAllow: /\n");
 
 if (!adminOnly) {
   const adminFolder = join(output, "admin");

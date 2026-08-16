@@ -1,0 +1,58 @@
+name: Apply final admin platform
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.final-payload/**'
+      - '.github/workflows/apply-final-admin.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-final-admin
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Restore verified release files
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .final-payload/part* > /tmp/final-admin.b64
+          base64 -d /tmp/final-admin.b64 > /tmp/final-admin.tar.xz
+          echo '49fac30860a34a1dbc6da208c47e7b80e53b5ae11b14eefa51b491ee5bf586c2  /tmp/final-admin.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/final-admin.tar.xz -C .
+      - name: Verify the complete admin build
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check pages-src/admin-final.js
+          node --check pages-src/build.mjs
+          PAGES_BASE=/crimescene-admin ADMIN_ONLY=1 node pages-src/build.mjs
+          node scripts/smoke-admin.cjs
+          test -s _site/index.html
+          test -s _site/assets/admin-final.js
+          test -s _site/assets/final.css
+          ! grep -Eq 'Supabase|OWNER|AES-GCM|서비스 역할' _site/assets/admin-final.js
+      - name: Commit final admin platform
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .final-payload .github/workflows/apply-final-admin.yml _site
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: ship final non-payment operations console'
+          git push origin HEAD:main

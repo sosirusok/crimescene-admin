@@ -1,0 +1,49 @@
+name: Apply admin payment guard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-payment-guard.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-payment-guard
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply and verify admin payment guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/patch-payment-guard.cjs
+          node --check pages-src/admin-final.js
+          grep -q '온라인 카드 결제 (연동 후 사용)' pages-src/admin-final.js
+          grep -q '카드 승인·취소 모듈' pages-src/admin-final.js
+          grep -q '예약은 결제 연동 없이 바로 확정됩니다' pages-src/admin-final.js
+          grep -q '결제 대기' pages-src/admin-final.js
+          PAGES_BASE=/crimescene-admin ADMIN_ONLY=1 node pages-src/build.mjs
+          node scripts/smoke-admin.cjs
+      - name: Commit verified admin payment guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm scripts/patch-payment-guard.cjs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pages-src/admin-final.js scripts/patch-payment-guard.cjs
+          git commit -m 'fix: prevent premature online payment activation'
+          git push origin HEAD:main

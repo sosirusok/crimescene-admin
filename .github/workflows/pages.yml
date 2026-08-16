@@ -45,10 +45,13 @@ jobs:
           test -s _site/assets/admin-final.js
           node --check _site/assets/admin-final.js
           node scripts/smoke-admin.cjs
-          grep -q 'admin-final.js?v=20260816-30' _site/index.html
-          grep -q 'final.css?v=20260816-30' _site/index.html
+          grep -q 'admin-final.js?v=' _site/index.html
+          grep -q 'final.css?v=' _site/index.html
           grep -q 'noindex,nofollow,noarchive' _site/index.html
           grep -q 'Disallow: /' _site/robots.txt
+          grep -q '온라인 카드 결제 (연동 후 사용)' _site/assets/admin-final.js
+          grep -q '카드 승인·취소 모듈' _site/assets/admin-final.js
+          grep -q '예약은 결제 연동 없이 바로 확정됩니다' _site/assets/admin-final.js
           ! grep -Eq 'Supabase|OWNER|AES-GCM|서비스 역할' _site/assets/admin-final.js
       - name: Verify management API
         shell: bash
@@ -94,14 +97,21 @@ jobs:
           ready=0
           for attempt in $(seq 1 24); do
             if curl --retry 2 --retry-all-errors -fsSL "${base}?sha=${GITHUB_SHA}" -o /tmp/admin.html; then
-              if grep -q 'admin-final.js?v=20260816-30' /tmp/admin.html; then ready=1; break; fi
+              if grep -q 'admin-final.js?v=' /tmp/admin.html; then ready=1; break; fi
             fi
             sleep 5
           done
           test "$ready" = "1"
-          curl --retry 4 --retry-all-errors -fsSL "${base}assets/admin-final.js?v=20260816-30" -o /tmp/admin-final.js
-          curl --retry 4 --retry-all-errors -fsSL "${base}assets/final.css?v=20260816-30" -o /tmp/final.css
+          script_path=$(grep -oE 'assets/admin-final\.js\?v=[^" ]+' /tmp/admin.html | head -1)
+          style_path=$(grep -oE 'assets/final\.css\?v=[^" ]+' /tmp/admin.html | head -1)
+          test -n "$script_path"
+          test -n "$style_path"
+          curl --retry 4 --retry-all-errors -fsSL "${base}${script_path}" -o /tmp/admin-final.js
+          curl --retry 4 --retry-all-errors -fsSL "${base}${style_path}" -o /tmp/final.css
           node --check /tmp/admin-final.js
           test -s /tmp/final.css
+          grep -q '온라인 카드 결제 (연동 후 사용)' /tmp/admin-final.js
+          grep -q '카드 승인·취소 모듈' /tmp/admin-final.js
+          grep -q '예약은 결제 연동 없이 바로 확정됩니다' /tmp/admin-final.js
           grep -q 'noindex,nofollow,noarchive' /tmp/admin.html
           echo "Live admin site verified: ${base}"

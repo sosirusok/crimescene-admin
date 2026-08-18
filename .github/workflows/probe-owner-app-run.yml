@@ -1,0 +1,30 @@
+name: Inspect final owner app verification rerun
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/probe-owner-app-run.yml'
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow build-owner-app-final.yml --limit 5 --json databaseId,status,conclusion,headSha,event,createdAt,updatedAt,url > android-owner-app/ACTION_STATUS.json
+          rm -f .github/workflows/probe-owner-app-run.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A .github/workflows/probe-owner-app-run.yml android-owner-app/ACTION_STATUS.json
+          git commit -m 'ci: record final owner app verification rerun'
+          git pull --rebase origin main
+          git push origin HEAD:main

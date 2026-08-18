@@ -101,13 +101,14 @@ jobs:
               -keysize 4096 \
               -validity 10000 \
               -dname 'CN=Crimescene Play Owner App, OU=Seomyeon Branch, O=Crimescene Play, L=Busan, C=KR'
-            cat > android-owner-app/signing.properties <<EOF
-            storeFile=/tmp/Crimescene-Owner-Update-Key.jks
-            storePassword=${password}
-            keyAlias=crimescene-owner
-            keyPassword=${password}
-            EOF
+            printf '%s\n' \
+              'storeFile=/tmp/Crimescene-Owner-Update-Key.jks' \
+              "storePassword=${password}" \
+              'keyAlias=crimescene-owner' \
+              "keyPassword=${password}" \
+              > android-owner-app/signing.properties
             test -s /tmp/Crimescene-Owner-Update-Key.jks
+            test -s android-owner-app/signing.properties
           } 2>&1 | tee /tmp/signing.log
 
       - name: Build signed release APK
@@ -152,16 +153,16 @@ jobs:
             cp /tmp/Crimescene-Owner-Update-Key-password.txt /tmp/owner-app-delivery/
             cp /tmp/apk-signature.txt /tmp/owner-app-delivery/Crimescene-Owner-App-signature.txt
             cp /tmp/apk-badging.txt /tmp/owner-app-delivery/Crimescene-Owner-App-package.txt
-            cat > /tmp/owner-app-delivery/Crimescene-Owner-Signing-Backup-README.txt <<'EOF'
-            크라임씬플레이 예약 알림 앱 서명 백업
-
-            패키지: com.crimesceneplay.owner
-            서명 별칭: crimescene-owner
-
-            Crimescene-Owner-Update-Key.jks와 비밀번호 파일을 함께 보관하세요.
-            향후 앱 업데이트는 반드시 같은 키로 서명해야 기존 앱 위에 설치됩니다.
-            두 파일을 GitHub, 카카오톡, 공개 링크, 공용 드라이브에 올리지 마세요.
-            EOF
+            printf '%s\n' \
+              '크라임씬플레이 예약 알림 앱 서명 백업' \
+              '' \
+              '패키지: com.crimesceneplay.owner' \
+              '서명 별칭: crimescene-owner' \
+              '' \
+              'Crimescene-Owner-Update-Key.jks와 비밀번호 파일을 함께 보관하세요.' \
+              '향후 앱 업데이트는 반드시 같은 키로 서명해야 기존 앱 위에 설치됩니다.' \
+              '두 파일을 GitHub, 카카오톡, 공개 링크, 공용 드라이브에 올리지 마세요.' \
+              > /tmp/owner-app-delivery/Crimescene-Owner-Signing-Backup-README.txt
             (cd /tmp/owner-app-delivery && sha256sum Crimescene-Owner-App.apk > Crimescene-Owner-App.apk.sha256)
             cp /tmp/owner-app-delivery/Crimescene-Owner-App.apk.sha256 android-owner-app/dist/
             cp /tmp/apk-signature.txt android-owner-app/dist/Crimescene-Owner-App-signature.txt

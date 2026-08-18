@@ -163,9 +163,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            set -eu
-            apk="$GITHUB_WORKSPACE/android-owner-app/app/build/outputs/apk/release/app-release.apk"
-            adb install -r "$apk"
+            adb install -r "$GITHUB_WORKSPACE/android-owner-app/app/build/outputs/apk/release/app-release.apk"
             adb shell am force-stop com.crimesceneplay.owner
             adb shell am start -W -n com.crimesceneplay.owner/.MainActivity | tee /tmp/activity-start.txt
             grep -q 'Status: ok' /tmp/activity-start.txt
@@ -175,10 +173,7 @@ jobs:
             grep -q '예약 알림 연결' /tmp/owner-window.xml
             grep -q '관리자 암호' /tmp/owner-window.xml
             grep -q '연결하기' /tmp/owner-window.xml
-            if adb logcat -d -t 700 | grep -q 'FATAL EXCEPTION'; then
-              adb logcat -d -t 700
-              exit 1
-            fi
+            ! adb logcat -d -t 700 | grep -q 'FATAL EXCEPTION'
             adb exec-out screencap -p > /tmp/first-use-screen.png
             test -s /tmp/first-use-screen.png
 

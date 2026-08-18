@@ -25,7 +25,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class NotificationSyncService extends Service {
-    private static final String CHANNEL_ALERTS = "reservation_alerts";
+    static final String CHANNEL_ALERTS = "reservation_alerts";
     private static final String CHANNEL_SYNC = "reservation_sync";
     private static final int FOREGROUND_ID = 7001;
     private static final int SUMMARY_ID = 7002;
@@ -86,15 +86,15 @@ public final class NotificationSyncService extends Service {
         prefs = new SecurePrefs(this);
         store = new NotificationStore(this);
         createChannels();
-        setState(AppConfig.STATE_CONNECTING, "서버에 연결하는 중", false);
-        startForeground(FOREGROUND_ID, ongoingNotification("서버에 연결하는 중"));
+        setState(AppConfig.STATE_CONNECTING, "예약 알림을 준비하는 중", false);
+        startForeground(FOREGROUND_ID, ongoingNotification("예약 알림을 준비하고 있습니다"));
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (!prefs.isPaired()) {
             stoppingIntentionally = true;
-            setState(AppConfig.STATE_STOPPED, "앱 연결이 필요합니다", false);
+            setState(AppConfig.STATE_STOPPED, "다시 연결해 주세요", false);
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -126,8 +126,8 @@ public final class NotificationSyncService extends Service {
                     prefs.setInitialSyncDone(true);
                 }
 
-                setState(AppConfig.STATE_CONNECTED, "실시간으로 확인 중", true);
-                updateForeground("실시간으로 예약을 확인하고 있습니다");
+                setState(AppConfig.STATE_CONNECTED, "새 예약을 확인하고 있습니다", true);
+                updateForeground("새 예약을 확인하고 있습니다");
 
                 long after = prefs.getLastId();
                 ApiClient.FetchResult result = ApiClient.waitForNew(
@@ -144,13 +144,13 @@ public final class NotificationSyncService extends Service {
                     broadcastDataChanged();
                     break;
                 }
-                setState(AppConfig.STATE_RETRYING, "서버 연결을 다시 시도하는 중", false);
-                updateForeground("서버 연결을 다시 시도하고 있습니다");
+                setState(AppConfig.STATE_RETRYING, "연결을 다시 시도하고 있습니다", false);
+                updateForeground("연결을 다시 시도하고 있습니다");
                 sleepRetry(retryDelay);
                 retryDelay = Math.min(AppConfig.NETWORK_RETRY_MAX_MS, retryDelay * 2);
             } catch (Exception error) {
-                setState(AppConfig.STATE_RETRYING, "인터넷 연결을 다시 시도하는 중", false);
-                updateForeground("인터넷 연결을 다시 시도하고 있습니다");
+                setState(AppConfig.STATE_RETRYING, "인터넷 연결을 확인하고 있습니다", false);
+                updateForeground("인터넷 연결을 확인하고 있습니다");
                 sleepRetry(retryDelay);
                 retryDelay = Math.min(AppConfig.NETWORK_RETRY_MAX_MS, retryDelay * 2);
             }
@@ -174,8 +174,8 @@ public final class NotificationSyncService extends Service {
             );
             processResult(result, prefs.isInitialSyncDone());
             if (!prefs.isInitialSyncDone()) prefs.setInitialSyncDone(true);
-            setState(AppConfig.STATE_CONNECTED, "실시간으로 확인 중", true);
-            updateForeground("실시간으로 예약을 확인하고 있습니다");
+            setState(AppConfig.STATE_CONNECTED, "새 예약을 확인하고 있습니다", true);
+            updateForeground("새 예약을 확인하고 있습니다");
         } catch (ApiClient.ApiException error) {
             if (error.status == 401) {
                 stoppingIntentionally = true;
@@ -183,7 +183,7 @@ public final class NotificationSyncService extends Service {
                 broadcastDataChanged();
                 stopSelf();
             } else {
-                setState(AppConfig.STATE_RETRYING, "서버 연결을 다시 시도하는 중", false);
+                setState(AppConfig.STATE_RETRYING, "연결을 다시 시도하고 있습니다", false);
             }
         } catch (Exception error) {
             setState(AppConfig.STATE_RETRYING, "인터넷 연결을 확인해 주세요", false);
@@ -320,8 +320,14 @@ public final class NotificationSyncService extends Service {
     }
 
     private boolean canPostNotifications() {
-        return Build.VERSION.SDK_INT < 33
-                || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            return false;
+        }
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager == null || !manager.areNotificationsEnabled()) return false;
+        NotificationChannel channel = manager.getNotificationChannel(CHANNEL_ALERTS);
+        return channel == null || channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
     }
 
     private String notificationTitle(OwnerNotification item) {

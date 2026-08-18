@@ -31,6 +31,19 @@ final class SecurePrefs {
 
     SecurePrefs(Context context) {
         prefs = context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        migrateVisibleStatusText();
+    }
+
+    private void migrateVisibleStatusText() {
+        String message = prefs.getString(SYNC_MESSAGE, "");
+        if (message == null || message.isEmpty() || message.contains("서버")) {
+            prefs.edit()
+                    .putString(SYNC_STATE, AppConfig.STATE_CONNECTING)
+                    .putString(SYNC_MESSAGE, "예약 알림을 준비하는 중")
+                    .apply();
+        } else if ("실시간으로 확인 중".equals(message) || "실시간 알림 수신 중".equals(message)) {
+            prefs.edit().putString(SYNC_MESSAGE, "새 예약을 확인하고 있습니다").apply();
+        }
     }
 
     boolean isPaired() {

@@ -15,6 +15,7 @@ final class NotificationStore extends SQLiteOpenHelper {
 
     NotificationStore(Context context) {
         super(context.getApplicationContext(), DB_NAME, null, DB_VERSION);
+        setWriteAheadLoggingEnabled(true);
     }
 
     @Override
@@ -48,47 +49,53 @@ final class NotificationStore extends SQLiteOpenHelper {
     }
 
     boolean insert(OwnerNotification item) {
-        ContentValues values = new ContentValues();
-        values.put("id", item.id);
-        values.put("event_type", item.eventType);
-        values.put("title", item.title);
-        values.put("reservation_id", item.reservationId);
-        values.put("theme_title", item.themeTitle);
-        values.put("play_date", item.playDate);
-        values.put("start_time", item.startTime);
-        values.put("customer_name", item.customerName);
-        try {
-            values.put("phone_cipher", SecurePrefs.encryptLocal(item.phone));
-        } catch (Exception error) {
-            values.putNull("phone_cipher");
-        }
-        values.put("phone_masked", item.phoneMasked);
-        values.put("party_size", item.partySize);
-        values.put("booking_label", item.bookingLabel);
-        values.put("source_label", item.sourceLabel);
-        values.put("total_amount", item.totalAmount);
-        values.put("special_request", item.specialRequest == null ? "" : item.specialRequest);
-        values.put("reservation_status", item.reservationStatus);
-        values.put("created_at", item.createdAt);
-        return getWritableDatabase().insertWithOnConflict(
-                "notifications", null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1;
+        return insertInto(getWritableDatabase(), item);
     }
 
     void insertAll(List<OwnerNotification> items) {
+        if (items == null || items.isEmpty()) return;
         SQLiteDatabase db = getWritableDatabase();
         db.beginTransaction();
         try {
-            for (OwnerNotification item : items) insert(item);
+            for (OwnerNotification item : items) insertInto(db, item);
             db.setTransactionSuccessful();
         } finally {
             db.endTransaction();
         }
     }
 
-    List<OwnerNotification> listAll() {
+    private boolean insertInto(SQLiteDatabase db, OwnerNotification item) {
+        ContentValues values = new ContentValues();
+        values.put("id", item.id);
+        values.put("event_type", safe(item.eventType));
+        values.put("title", safe(item.title));
+        values.put("reservation_id", safe(item.reservationId));
+        values.put("theme_title", safe(item.themeTitle));
+        values.put("play_date", safe(item.playDate));
+        values.put("start_time", safe(item.startTime));
+        values.put("customer_name", safe(item.customerName));
+        try {
+            values.put("phone_cipher", SecurePrefs.encryptLocal(safe(item.phone)));
+        } catch (Exception error) {
+            values.putNull("phone_cipher");
+        }
+        values.put("phone_masked", safe(item.phoneMasked));
+        values.put("party_size", Math.max(0, item.partySize));
+        values.put("booking_label", safe(item.bookingLabel));
+        values.put("source_label", safe(item.sourceLabel));
+        values.put("total_amount", Math.max(0, item.totalAmount));
+        values.put("special_request", safe(item.specialRequest));
+        values.put("reservation_status", safe(item.reservationStatus));
+        values.put("created_at", safe(item.createdAt));
+        return db.insertWithOnConflict(
+                "notifications", null, values, SQLiteDatabase.CONFLICT_IGNORE) != -1;
+    }
+
+    List<OwnerNotification> listRecent(int requestedLimit) {
+        int limit = Math.min(AppConfig.LOCAL_HISTORY_LIMIT, Math.max(1, requestedLimit));
         ArrayList<OwnerNotification> result = new ArrayList<>();
         try (Cursor cursor = getReadableDatabase().query(
-                "notifications", null, null, null, null, null, "id DESC", "1000")) {
+                "notifications", null, null, null, null, null, "id DESC", String.valueOf(limit))) {
             while (cursor.moveToNext()) {
                 OwnerNotification item = new OwnerNotification();
                 item.id = cursor.getLong(cursor.getColumnIndexOrThrow("id"));
@@ -125,7 +132,19 @@ final class NotificationStore extends SQLiteOpenHelper {
         }
     }
 
+    void trimToMax(int requestedLimit) {
+        int limit = Math.min(10_000, Math.max(100, requestedLimit));
+        getWritableDatabase().execSQL(
+                "DELETE FROM notifications WHERE id NOT IN " +
+                        "(SELECT id FROM notifications ORDER BY id DESC LIMIT " + limit + ")"
+        );
+    }
+
     void clearAll() {
         getWritableDatabase().delete("notifications", null, null);
+    }
+
+    private static String safe(String value) {
+        return value == null ? "" : value;
     }
 }

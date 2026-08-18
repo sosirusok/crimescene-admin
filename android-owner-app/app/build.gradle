@@ -1,0 +1,56 @@
+plugins {
+    id "com.android.application"
+}
+
+import java.util.Properties
+
+android {
+    namespace "com.crimesceneplay.owner"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.crimesceneplay.owner"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    def signingFile = rootProject.file("signing.properties")
+    if (signingFile.exists()) {
+        def signingProps = new Properties()
+        signingFile.withInputStream { signingProps.load(it) }
+        signingConfigs {
+            release {
+                storeFile rootProject.file(signingProps["storeFile"])
+                storePassword signingProps["storePassword"]
+                keyAlias signingProps["keyAlias"]
+                keyPassword signingProps["keyPassword"]
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingFile.exists() ? signingConfigs.release : null
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    packaging {
+        resources {
+            excludes += ["META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*"]
+        }
+    }
+}

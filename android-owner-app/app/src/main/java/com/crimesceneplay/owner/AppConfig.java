@@ -1,7 +1,7 @@
 package com.crimesceneplay.owner;
 
 final class AppConfig {
-    static final String API_BASE = "https://jhjbiejqtbidloxcwryr.supabase.co/functions/v1/owner-notify";
+    static final String API_BASE = "https://jhjbiejqtbidloxcwryr.supabase.co/functions/v1/owner-app-api";
     static final String PUBLISHABLE_KEY = "sb_publishable_mA5DOfPA-ExloawT3aJpNw_2PeVgEEc";
     static final String APP_VERSION = "1.1.1";
     static final int DEFAULT_POLL_SECONDS = 15;

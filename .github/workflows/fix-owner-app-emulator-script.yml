@@ -1,0 +1,83 @@
+name: Fix final emulator verification script
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-owner-app-emulator-script.yml'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Make emulator commands independent
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/build-owner-app-final.yml')
+          text = path.read_text()
+          old = '''          script: |
+            set -eu
+            apk="$GITHUB_WORKSPACE/android-owner-app/app/build/outputs/apk/release/app-release.apk"
+            adb install -r "$apk"
+            adb shell am force-stop com.crimesceneplay.owner
+            adb shell am start -W -n com.crimesceneplay.owner/.MainActivity | tee /tmp/activity-start.txt
+            grep -q 'Status: ok' /tmp/activity-start.txt
+            sleep 3
+            adb shell uiautomator dump /sdcard/owner-window.xml
+            adb pull /sdcard/owner-window.xml /tmp/owner-window.xml
+            grep -q '예약 알림 연결' /tmp/owner-window.xml
+            grep -q '관리자 암호' /tmp/owner-window.xml
+            grep -q '연결하기' /tmp/owner-window.xml
+            if adb logcat -d -t 700 | grep -q 'FATAL EXCEPTION'; then
+              adb logcat -d -t 700
+              exit 1
+            fi
+            adb exec-out screencap -p > /tmp/first-use-screen.png
+            test -s /tmp/first-use-screen.png
+'''
+          new = '''          script: |
+            adb install -r "$GITHUB_WORKSPACE/android-owner-app/app/build/outputs/apk/release/app-release.apk"
+            adb shell am force-stop com.crimesceneplay.owner
+            adb shell am start -W -n com.crimesceneplay.owner/.MainActivity | tee /tmp/activity-start.txt
+            grep -q 'Status: ok' /tmp/activity-start.txt
+            sleep 3
+            adb shell uiautomator dump /sdcard/owner-window.xml
+            adb pull /sdcard/owner-window.xml /tmp/owner-window.xml
+            grep -q '예약 알림 연결' /tmp/owner-window.xml
+            grep -q '관리자 암호' /tmp/owner-window.xml
+            grep -q '연결하기' /tmp/owner-window.xml
+            ! adb logcat -d -t 700 | grep -q 'FATAL EXCEPTION'
+            adb exec-out screencap -p > /tmp/first-use-screen.png
+            test -s /tmp/first-use-screen.png
+'''
+          if old not in text:
+              raise SystemExit('emulator script block not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          grep -q 'adb install -r "\$GITHUB_WORKSPACE/android-owner-app/app/build/outputs/apk/release/app-release.apk"' .github/workflows/build-owner-app-final.yml
+          ! grep -q '^            apk=' .github/workflows/build-owner-app-final.yml
+
+      - name: Commit fix and remove temporary files
+        run: |
+          rm -f .github/workflows/fix-owner-app-emulator-script.yml android-owner-app/ACTION_STATUS.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A .github/workflows/fix-owner-app-emulator-script.yml android-owner-app/ACTION_STATUS.json .github/workflows/build-owner-app-final.yml
+          git commit -m 'ci: make final emulator commands self-contained'
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Start final verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build-owner-app-final.yml --repo "$GITHUB_REPOSITORY" --ref main

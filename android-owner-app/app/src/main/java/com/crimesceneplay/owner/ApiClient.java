@@ -3,6 +3,7 @@ package com.crimesceneplay.owner;
 import android.os.Build;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -49,7 +50,8 @@ final class ApiClient {
         JSONObject json = request("POST", "/pair", null, body, 15_000);
         String token = json.optString("token", "");
         if (token.length() < 32) throw new IOException("앱 연결 정보를 받지 못했습니다.");
-        return new PairResult(token, AppConfig.DEFAULT_POLL_SECONDS);
+        int pollSeconds = Math.max(15, json.optInt("pollSeconds", AppConfig.DEFAULT_POLL_SECONDS));
+        return new PairResult(token, pollSeconds);
     }
 
     static FetchResult fetch(String token, long after, int limit) throws Exception {
@@ -82,7 +84,7 @@ final class ApiClient {
         return new FetchResult(
                 items,
                 json.optLong("newestId", fallbackId),
-                AppConfig.DEFAULT_POLL_SECONDS
+                Math.max(15, json.optInt("pollSeconds", AppConfig.DEFAULT_POLL_SECONDS))
         );
     }
 
@@ -93,21 +95,29 @@ final class ApiClient {
             connection.setConnectTimeout(12_000);
             connection.setReadTimeout(readTimeout);
             connection.setUseCaches(false);
+            connection.setInstanceFollowRedirects(false);
             connection.setRequestProperty("Accept", "application/json");
             connection.setRequestProperty("apikey", AppConfig.PUBLISHABLE_KEY);
             connection.setRequestProperty("X-Client-Info", "crimescene-owner-android/" + AppConfig.APP_VERSION);
             if (token != null) connection.setRequestProperty("Authorization", "Bearer " + token);
             if (body != null) {
+                byte[] payload = body.toString().getBytes(StandardCharsets.UTF_8);
                 connection.setDoOutput(true);
+                connection.setFixedLengthStreamingMode(payload.length);
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
                 try (OutputStream output = connection.getOutputStream()) {
-                    output.write(body.toString().getBytes(StandardCharsets.UTF_8));
+                    output.write(payload);
                 }
             }
             int status = connection.getResponseCode();
             InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
             String text = read(stream);
-            JSONObject json = text.isEmpty() ? new JSONObject() : new JSONObject(text);
+            JSONObject json;
+            try {
+                json = text.isEmpty() ? new JSONObject() : new JSONObject(text);
+            } catch (JSONException error) {
+                throw new IOException("서버 응답을 확인하지 못했습니다.", error);
+            }
             if (status >= 400) {
                 throw new ApiException(status, json.optString("error", "요청을 처리하지 못했습니다."));
             }
@@ -122,7 +132,10 @@ final class ApiClient {
         StringBuilder result = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
             String line;
-            while ((line = reader.readLine()) != null) result.append(line);
+            while ((line = reader.readLine()) != null) {
+                result.append(line);
+                if (result.length() > 2_000_000) throw new IOException("서버 응답이 너무 큽니다.");
+            }
         }
         return result.toString();
     }

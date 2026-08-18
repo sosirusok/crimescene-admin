@@ -163,7 +163,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            set -euo pipefail
+            set -eu
             apk="$GITHUB_WORKSPACE/android-owner-app/app/build/outputs/apk/release/app-release.apk"
             adb install -r "$apk"
             adb shell am force-stop com.crimesceneplay.owner

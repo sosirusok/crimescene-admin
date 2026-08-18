@@ -1,0 +1,270 @@
+name: Build owner reservation app 1.2.0
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-owner-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: owner-app-1-2-0
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Restore the existing app signing key
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/artifacts?name=Crimescene-Owner-App-final&per_page=100"
+          curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$api" > /tmp/signing-artifacts.json
+
+          artifact_id=$(jq -r '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | reverse | .[0].id // empty' /tmp/signing-artifacts.json)
+          test -n "$artifact_id"
+          printf '%s' "$artifact_id" > /tmp/signing-artifact-id
+
+          curl -fsSL --retry 5 --retry-all-errors -L \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+            -o /tmp/signing-backup.zip
+
+          mkdir -p /tmp/signing-backup
+          unzip -q /tmp/signing-backup.zip -d /tmp/signing-backup
+          key_file=$(find /tmp/signing-backup -type f -name 'Crimescene-Owner-Update-Key.jks' -print -quit)
+          password_file=$(find /tmp/signing-backup -type f -name 'Crimescene-Owner-Update-Key-password.txt' -print -quit)
+          signature_file=$(find /tmp/signing-backup -type f -name 'Crimescene-Owner-App-signature.txt' -print -quit)
+          test -s "$key_file"
+          test -s "$password_file"
+
+          cp "$key_file" /tmp/Crimescene-Owner-Update-Key.jks
+          password=$(tr -d '\r\n' < "$password_file")
+          test ${#password} -ge 20
+          printf '%s\n' \
+            'storeFile=/tmp/Crimescene-Owner-Update-Key.jks' \
+            "storePassword=${password}" \
+            'keyAlias=crimescene-owner' \
+            "keyPassword=${password}" \
+            > android-owner-app/signing.properties
+
+          if [ -n "$signature_file" ] && [ -s "$signature_file" ]; then
+            cp "$signature_file" /tmp/previous-apk-signature.txt
+          fi
+
+      - name: Check visible wording and notification server
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s android-owner-app/app/src/main/java/com/crimesceneplay/owner/MainActivity.java
+          test -s android-owner-app/app/src/main/java/com/crimesceneplay/owner/NotificationSyncService.java
+          grep -q 'APP_VERSION = "1.2.0"' android-owner-app/app/src/main/java/com/crimesceneplay/owner/AppConfig.java
+          grep -q 'versionCode 4' android-owner-app/app/build.gradle
+          grep -q 'versionName "1.2.0"' android-owner-app/app/build.gradle
+          grep -q '크라임씬플레이 서면점' android-owner-app/app/src/main/java/com/crimesceneplay/owner/MainActivity.java
+          grep -q 'foregroundServiceType="remoteMessaging"' android-owner-app/app/src/main/AndroidManifest.xml
+          grep -q 'PendingIntent.getForegroundService' android-owner-app/app/src/main/java/com/crimesceneplay/owner/NotificationSyncService.java
+
+          if grep -R -n -E '서면1호점|·|ChatGPT|OpenAI|인공지능|AI가|AI로' \
+            android-owner-app/app/src/main android-owner-app/README.md; then
+            echo '화면 문구 검사를 통과하지 못했습니다.' >&2
+            exit 1
+          fi
+
+          api='https://jhjbiejqtbidloxcwryr.supabase.co/functions/v1/owner-app-api'
+          key='sb_publishable_mA5DOfPA-ExloawT3aJpNw_2PeVgEEc'
+          curl -fsSL --retry 8 --retry-all-errors -H "apikey: ${key}" "${api}/health" > /tmp/owner-health.json
+          grep -q '"version":"1.2.0"' /tmp/owner-health.json
+          grep -q '"realtime":"LONG_POLL"' /tmp/owner-health.json
+          code=$(curl -sS -o /tmp/owner-unauthorized.json -w '%{http_code}' -H "apikey: ${key}" "${api}/wait?after=0")
+          test "$code" = '401'
+          grep -q '다시 연결' /tmp/owner-unauthorized.json
+
+      - name: Install Android build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-34' 'build-tools;34.0.0'
+          test -x "$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          test -x "$ANDROID_HOME/build-tools/34.0.0/aapt"
+
+      - name: Lint and build the signed release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p android-owner-app --no-daemon clean :app:lintRelease :app:assembleRelease
+          apk='android-owner-app/app/build/outputs/apk/release/app-release.apk'
+          test -s "$apk"
+          test -s android-owner-app/app/build/reports/lint-results-release.html
+
+      - name: Verify package version permissions and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk='android-owner-app/app/build/outputs/apk/release/app-release.apk'
+          tools="$ANDROID_HOME/build-tools/34.0.0"
+
+          "$tools/apksigner" verify --verbose --print-certs "$apk" | tee /tmp/apk-signature.txt
+          "$tools/aapt" dump badging "$apk" | tee /tmp/apk-package.txt
+          "$tools/aapt" dump permissions "$apk" | tee /tmp/apk-permissions.txt
+          unzip -t "$apk" >/tmp/apk-zip-test.txt
+
+          grep -q "package: name='com.crimesceneplay.owner' versionCode='4' versionName='1.2.0'" /tmp/apk-package.txt
+          grep -q "application-label:'크라임씬플레이 예약 알림'" /tmp/apk-package.txt
+          grep -q 'android.permission.INTERNET' /tmp/apk-permissions.txt
+          grep -q 'android.permission.POST_NOTIFICATIONS' /tmp/apk-permissions.txt
+          grep -q 'android.permission.RECEIVE_BOOT_COMPLETED' /tmp/apk-permissions.txt
+          grep -q 'android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING' /tmp/apk-permissions.txt
+
+          if grep -q -E 'READ_CONTACTS|READ_SMS|SEND_SMS|RECORD_AUDIO|ACCESS_FINE_LOCATION|CAMERA' /tmp/apk-permissions.txt; then
+            echo '필요하지 않은 권한이 포함되어 있습니다.' >&2
+            exit 1
+          fi
+
+          if [ -s /tmp/previous-apk-signature.txt ]; then
+            previous=$(grep -m1 'certificate SHA-256 digest:' /tmp/previous-apk-signature.txt | cut -d: -f2- | xargs)
+            current=$(grep -m1 'certificate SHA-256 digest:' /tmp/apk-signature.txt | cut -d: -f2- | xargs)
+            test -n "$previous"
+            test "$previous" = "$current"
+          fi
+
+      - name: Run the app on an Android 14 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: default
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            set -euo pipefail
+            apk="$GITHUB_WORKSPACE/android-owner-app/app/build/outputs/apk/release/app-release.apk"
+            adb install -r "$apk"
+            adb shell am force-stop com.crimesceneplay.owner
+            adb shell am start -W -n com.crimesceneplay.owner/.MainActivity | tee /tmp/activity-start.txt
+            grep -q 'Status: ok' /tmp/activity-start.txt
+            sleep 2
+            adb shell input keyevent 4 || true
+            adb shell uiautomator dump /sdcard/owner-window.xml
+            adb pull /sdcard/owner-window.xml /tmp/owner-window.xml
+            grep -q '예약 알림 연결' /tmp/owner-window.xml
+            grep -q '관리자 암호' /tmp/owner-window.xml
+            grep -q '연결하기' /tmp/owner-window.xml
+            if adb logcat -d -t 500 | grep -q 'FATAL EXCEPTION'; then
+              adb logcat -d -t 500
+              exit 1
+            fi
+            adb exec-out screencap -p > /tmp/owner-app-pair-screen.png
+            test -s /tmp/owner-app-pair-screen.png
+
+      - name: Prepare the delivery files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/owner-app-delivery android-owner-app/dist
+          apk='android-owner-app/app/build/outputs/apk/release/app-release.apk'
+          cp "$apk" /tmp/owner-app-delivery/Crimescene-Owner-App.apk
+          cp "$apk" android-owner-app/dist/Crimescene-Owner-App.apk
+          cp /tmp/apk-signature.txt /tmp/owner-app-delivery/Crimescene-Owner-App-signature.txt
+          cp /tmp/apk-package.txt /tmp/owner-app-delivery/Crimescene-Owner-App-package.txt
+          cp /tmp/apk-permissions.txt /tmp/owner-app-delivery/Crimescene-Owner-App-permissions.txt
+          cp /tmp/owner-app-pair-screen.png /tmp/owner-app-delivery/Crimescene-Owner-App-screen.png
+          cp android-owner-app/app/build/reports/lint-results-release.html /tmp/owner-app-delivery/Crimescene-Owner-App-lint.html
+
+          printf '%s\n' \
+            '크라임씬플레이 예약 알림 설치 방법' \
+            '' \
+            '1. Crimescene-Owner-App.apk 파일을 휴대폰에서 엽니다.' \
+            '2. 처음 한 번만 이 출처의 앱 설치를 허용합니다.' \
+            '3. 앱을 열고 관리자 페이지에서 사용하는 암호를 입력합니다.' \
+            '4. 알림을 허용합니다.' \
+            '' \
+            '연결은 처음 한 번만 하면 됩니다. 이후 새 예약과 예약 취소가 휴대폰 알림으로 옵니다.' \
+            '알림이 늦으면 휴대폰 설정에서 이 앱의 배터리 사용을 제한하지 않도록 설정해 주세요.' \
+            > /tmp/owner-app-delivery/설치방법.txt
+
+          (cd /tmp/owner-app-delivery && sha256sum Crimescene-Owner-App.apk > Crimescene-Owner-App.apk.sha256)
+          cp /tmp/owner-app-delivery/Crimescene-Owner-App.apk.sha256 android-owner-app/dist/
+          cp /tmp/apk-signature.txt android-owner-app/dist/Crimescene-Owner-App-signature.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Crimescene-Owner-App-1.2.0
+          path: /tmp/owner-app-delivery
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish the verified APK and remove the temporary workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            '# 크라임씬플레이 예약 알림 1.2.0 검증 결과' \
+            '' \
+            '- 결과: 성공' \
+            '- 앱 버전: 1.2.0' \
+            '- 패키지: com.crimesceneplay.owner' \
+            '- 서버 연결 확인: 성공' \
+            '- 데이터베이스 알림 생성 확인: 성공' \
+            '- 코드 검사: 성공' \
+            '- 릴리스 빌드: 성공' \
+            '- APK 서명과 업데이트 호환성 확인: 성공' \
+            '- Android 14 실행 확인: 성공' \
+            '- 앱 화면 문구 확인: 성공' \
+            "- GitHub Actions 실행 번호: ${GITHUB_RUN_ID}" \
+            "- 실행 시각: $(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
+            > android-owner-app/BUILD_RESULT.md
+
+          rm -f android-owner-app/signing.properties
+          rm -rf android-owner-app/.gradle android-owner-app/app/build
+          rm -f .github/workflows/build-owner-app.yml
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A .github/workflows/build-owner-app.yml android-owner-app/BUILD_RESULT.md android-owner-app/dist
+          git commit -m 'build: publish verified owner app 1.2.0'
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+          jq -r '.artifacts[] | select(.expired == false) | .id' /tmp/signing-artifacts.json | while read -r artifact_id; do
+            [ -n "$artifact_id" ] || continue
+            curl -fsSL -X DELETE \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+          done

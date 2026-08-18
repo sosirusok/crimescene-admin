@@ -41,7 +41,7 @@ jobs:
           test -s android-owner-app/app/src/main/AndroidManifest.xml
           test -s android-owner-app/app/src/main/java/com/crimesceneplay/owner/MainActivity.java
           test -s android-owner-app/app/src/main/java/com/crimesceneplay/owner/NotificationSyncService.java
-          grep -q 'functions/v1/owner-notify' android-owner-app/app/src/main/java/com/crimesceneplay/owner/AppConfig.java
+          grep -q 'functions/v1/owner-app-api' android-owner-app/app/src/main/java/com/crimesceneplay/owner/AppConfig.java
           grep -q 'APP_VERSION = "1.1.1"' android-owner-app/app/src/main/java/com/crimesceneplay/owner/AppConfig.java
           grep -q 'waitForNew' android-owner-app/app/src/main/java/com/crimesceneplay/owner/ApiClient.java
           grep -q 'versionCode 3' android-owner-app/app/build.gradle
@@ -52,7 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          api='https://jhjbiejqtbidloxcwryr.supabase.co/functions/v1/owner-notify'
+          api='https://jhjbiejqtbidloxcwryr.supabase.co/functions/v1/owner-app-api'
           key='sb_publishable_mA5DOfPA-ExloawT3aJpNw_2PeVgEEc'
           curl --retry 8 --retry-all-errors -fsSL -H "apikey: ${key}" "${api}/health" > /tmp/owner-health.json
           grep -q '"version":"1.1.1"' /tmp/owner-health.json

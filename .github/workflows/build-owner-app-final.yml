@@ -153,27 +153,43 @@ jobs:
             test "$previous" = "$current"
           fi
 
+      - name: Add swap space for the Android emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo swapoff -a || true
+          sudo fallocate -l 4G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+          gradle --stop || true
+          free -h
+
       - name: Launch on Android 14 and inspect first-use screen
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           arch: x86_64
           target: default
-          profile: pixel_6
+          profile: pixel_2
+          cores: 2
+          ram-size: 1536M
+          heap-size: 384M
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot -no-snapshot-save
           script: |
             adb install -r "$GITHUB_WORKSPACE/android-owner-app/app/build/outputs/apk/release/app-release.apk"
             adb shell am force-stop com.crimesceneplay.owner
             adb shell am start -W -n com.crimesceneplay.owner/.MainActivity | tee /tmp/activity-start.txt
             grep -q 'Status: ok' /tmp/activity-start.txt
             sleep 3
+            adb shell input keyevent 4
             adb shell uiautomator dump /sdcard/owner-window.xml
             adb pull /sdcard/owner-window.xml /tmp/owner-window.xml
             grep -q '예약 알림 연결' /tmp/owner-window.xml
             grep -q '관리자 암호' /tmp/owner-window.xml
             grep -q '연결하기' /tmp/owner-window.xml
-            ! adb logcat -d -t 700 | grep -q 'FATAL EXCEPTION'
+            if adb logcat -d -t 700 | grep -q 'FATAL EXCEPTION'; then exit 1; fi
             adb exec-out screencap -p > /tmp/first-use-screen.png
             test -s /tmp/first-use-screen.png
 

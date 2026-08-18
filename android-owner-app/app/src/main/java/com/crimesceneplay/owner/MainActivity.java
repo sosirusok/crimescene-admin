@@ -3,6 +3,8 @@ package com.crimesceneplay.owner;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
 import android.content.ColorStateList;
 import android.content.Context;
@@ -265,14 +267,14 @@ public final class MainActivity extends Activity {
                         store.trimToMax(AppConfig.LOCAL_HISTORY_LIMIT);
                         prefs.setLastId(Math.max(initial.newestId, store.maxId()));
                         prefs.setInitialSyncDone(true);
-                        prefs.setSyncState(AppConfig.STATE_CONNECTED, "실시간으로 확인 중", true);
+                        prefs.setSyncState(AppConfig.STATE_CONNECTED, "새 예약을 확인하고 있습니다", true);
                     } catch (ApiClient.ApiException error) {
                         if (error.status == 401) {
                             prefs.clear();
                             throw error;
                         }
                     } catch (Exception ignored) {
-                        prefs.setSyncState(AppConfig.STATE_RETRYING, "인터넷 연결을 다시 시도하는 중", false);
+                        prefs.setSyncState(AppConfig.STATE_RETRYING, "인터넷 연결을 확인하고 있습니다", false);
                     }
 
                     runOnUiThread(() -> {
@@ -342,7 +344,7 @@ public final class MainActivity extends Activity {
         statusDot = new View(this);
         statusBar.addView(statusDot, new LinearLayout.LayoutParams(dp(10), dp(10)));
 
-        statusText = text("서버에 연결하는 중", 14, Color.rgb(56, 60, 67), Typeface.BOLD);
+        statusText = text("예약 알림을 준비하는 중", 14, Color.rgb(56, 60, 67), Typeface.BOLD);
         statusText.setPadding(dp(9), 0, 0, 0);
         statusBar.addView(statusText, new LinearLayout.LayoutParams(
                 0,
@@ -488,13 +490,13 @@ public final class MainActivity extends Activity {
         String state = prefs.getSyncState();
         String message = prefs.getSyncMessage();
         if (AppConfig.STATE_CONNECTED.equals(state)) {
-            setStatus(Color.rgb(38, 145, 86), message.isEmpty() ? "실시간으로 확인 중" : message);
+            setStatus(Color.rgb(38, 145, 86), message.isEmpty() ? "새 예약을 확인하고 있습니다" : message);
         } else if (AppConfig.STATE_RETRYING.equals(state)) {
-            setStatus(Color.rgb(202, 119, 30), message.isEmpty() ? "연결을 다시 시도하는 중" : message);
+            setStatus(Color.rgb(202, 119, 30), message.isEmpty() ? "연결을 다시 시도하고 있습니다" : message);
         } else if (AppConfig.STATE_STOPPED.equals(state)) {
-            setStatus(Color.rgb(184, 48, 55), message.isEmpty() ? "앱 연결이 필요합니다" : message);
+            setStatus(Color.rgb(184, 48, 55), message.isEmpty() ? "다시 연결해 주세요" : message);
         } else {
-            setStatus(Color.rgb(87, 101, 122), message.isEmpty() ? "서버에 연결하는 중" : message);
+            setStatus(Color.rgb(87, 101, 122), message.isEmpty() ? "예약 알림을 준비하는 중" : message);
         }
     }
 
@@ -509,8 +511,14 @@ public final class MainActivity extends Activity {
     }
 
     private boolean notificationsAllowed() {
-        return Build.VERSION.SDK_INT < 33
-                || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            return false;
+        }
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager == null || !manager.areNotificationsEnabled()) return false;
+        NotificationChannel channel = manager.getNotificationChannel(NotificationSyncService.CHANNEL_ALERTS);
+        return channel == null || channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
     }
 
     private void requestNotificationPermission() {
@@ -588,7 +596,7 @@ public final class MainActivity extends Activity {
                         try {
                             if (token != null) ApiClient.disconnect(token);
                         } catch (Exception ignored) {
-                            // 휴대폰 연결은 바로 해제하고 서버의 오래된 기기는 자동 정리합니다.
+                            // 연결 정보는 다음 정리 때 자동으로 삭제됩니다.
                         }
                         prefs.clear();
                         store.clearAll();

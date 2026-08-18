@@ -21,6 +21,9 @@ final class SecurePrefs {
     private static final String LAST_ID = "last_notification_id";
     private static final String INITIAL_SYNC = "initial_sync_done";
     private static final String POLL_SECONDS = "poll_seconds";
+    private static final String SYNC_STATE = "sync_state";
+    private static final String SYNC_MESSAGE = "sync_message";
+    private static final String LAST_SYNC_AT = "last_sync_at";
 
     private final SharedPreferences prefs;
 
@@ -49,6 +52,9 @@ final class SecurePrefs {
                 .putLong(LAST_ID, 0L)
                 .putBoolean(INITIAL_SYNC, false)
                 .putInt(POLL_SECONDS, Math.max(15, pollSeconds))
+                .putString(SYNC_STATE, AppConfig.STATE_CONNECTING)
+                .putString(SYNC_MESSAGE, "서버에 연결하는 중")
+                .putLong(LAST_SYNC_AT, 0L)
                 .apply();
     }
 
@@ -74,6 +80,26 @@ final class SecurePrefs {
 
     void setPollSeconds(int seconds) {
         prefs.edit().putInt(POLL_SECONDS, Math.max(15, seconds)).apply();
+    }
+
+    void setSyncState(String state, String message, boolean successfulConnection) {
+        SharedPreferences.Editor editor = prefs.edit()
+                .putString(SYNC_STATE, state)
+                .putString(SYNC_MESSAGE, message == null ? "" : message);
+        if (successfulConnection) editor.putLong(LAST_SYNC_AT, System.currentTimeMillis());
+        editor.apply();
+    }
+
+    String getSyncState() {
+        return prefs.getString(SYNC_STATE, AppConfig.STATE_CONNECTING);
+    }
+
+    String getSyncMessage() {
+        return prefs.getString(SYNC_MESSAGE, "서버에 연결하는 중");
+    }
+
+    long getLastSyncAt() {
+        return prefs.getLong(LAST_SYNC_AT, 0L);
     }
 
     void clear() {
@@ -119,7 +145,11 @@ final class SecurePrefs {
 
     private static String decrypt(String value) throws Exception {
         byte[] packed = Base64.decode(value, Base64.NO_WRAP);
+        if (packed.length < 14) throw new IllegalArgumentException("Invalid encrypted value");
         int ivLength = packed[0] & 0xff;
+        if (ivLength < 12 || packed.length <= 1 + ivLength) {
+            throw new IllegalArgumentException("Invalid encrypted value");
+        }
         byte[] iv = new byte[ivLength];
         byte[] encrypted = new byte[packed.length - 1 - ivLength];
         System.arraycopy(packed, 1, iv, 0, ivLength);

@@ -46,51 +46,75 @@ final class ApiClient {
         body.put("accessKey", accessKey);
         body.put("deviceName", deviceName());
         body.put("appVersion", AppConfig.APP_VERSION);
-        JSONObject json = request("POST", "/pair", null, body);
+        JSONObject json = request("POST", "/pair", null, body, 15_000);
         String token = json.optString("token", "");
         if (token.length() < 32) throw new IOException("앱 연결 정보를 받지 못했습니다.");
-        return new PairResult(token, json.optInt("pollSeconds", AppConfig.DEFAULT_POLL_SECONDS));
+        return new PairResult(token, AppConfig.DEFAULT_POLL_SECONDS);
     }
 
     static FetchResult fetch(String token, long after, int limit) throws Exception {
-        JSONObject json = request("GET", "/notifications?after=" + Math.max(0L, after) + "&limit=" + limit, token, null);
-        JSONArray array = json.optJSONArray("notifications");
-        ArrayList<OwnerNotification> items = new ArrayList<>();
-        if (array != null) {
-            for (int i = 0; i < array.length(); i++) items.add(OwnerNotification.fromJson(array.getJSONObject(i)));
-        }
-        return new FetchResult(items, json.optLong("newestId", after),
-                json.optInt("pollSeconds", AppConfig.DEFAULT_POLL_SECONDS));
+        return fetchPath(token,
+                "/notifications?after=" + Math.max(0L, after) + "&limit=" + Math.max(1, limit),
+                15_000,
+                after);
+    }
+
+    static FetchResult waitForNew(String token, long after, int limit) throws Exception {
+        return fetchPath(token,
+                "/wait?after=" + Math.max(0L, after) + "&limit=" + Math.max(1, limit),
+                AppConfig.LONG_POLL_READ_TIMEOUT_MS,
+                after);
     }
 
     static void disconnect(String token) throws Exception {
-        request("POST", "/disconnect", token, new JSONObject());
+        request("POST", "/disconnect", token, new JSONObject(), 15_000);
     }
 
-    private static JSONObject request(String method, String path, String token, JSONObject body) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL(AppConfig.API_BASE + path).openConnection();
-        connection.setRequestMethod(method);
-        connection.setConnectTimeout(12_000);
-        connection.setReadTimeout(15_000);
-        connection.setUseCaches(false);
-        connection.setRequestProperty("Accept", "application/json");
-        connection.setRequestProperty("apikey", AppConfig.PUBLISHABLE_KEY);
-        connection.setRequestProperty("X-Client-Info", "crimescene-owner-android/" + AppConfig.APP_VERSION);
-        if (token != null) connection.setRequestProperty("Authorization", "Bearer " + token);
-        if (body != null) {
-            connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
-            try (OutputStream output = connection.getOutputStream()) {
-                output.write(body.toString().getBytes(StandardCharsets.UTF_8));
+    private static FetchResult fetchPath(String token, String path, int readTimeout, long fallbackId) throws Exception {
+        JSONObject json = request("GET", path, token, null, readTimeout);
+        JSONArray array = json.optJSONArray("notifications");
+        ArrayList<OwnerNotification> items = new ArrayList<>();
+        if (array != null) {
+            for (int i = 0; i < array.length(); i++) {
+                items.add(OwnerNotification.fromJson(array.getJSONObject(i)));
             }
         }
-        int status = connection.getResponseCode();
-        InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
-        String text = read(stream);
-        connection.disconnect();
-        JSONObject json = text.isEmpty() ? new JSONObject() : new JSONObject(text);
-        if (status >= 400) throw new ApiException(status, json.optString("error", "요청을 처리하지 못했습니다."));
-        return json;
+        return new FetchResult(
+                items,
+                json.optLong("newestId", fallbackId),
+                AppConfig.DEFAULT_POLL_SECONDS
+        );
+    }
+
+    private static JSONObject request(String method, String path, String token, JSONObject body, int readTimeout) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(AppConfig.API_BASE + path).openConnection();
+        try {
+            connection.setRequestMethod(method);
+            connection.setConnectTimeout(12_000);
+            connection.setReadTimeout(readTimeout);
+            connection.setUseCaches(false);
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setRequestProperty("apikey", AppConfig.PUBLISHABLE_KEY);
+            connection.setRequestProperty("X-Client-Info", "crimescene-owner-android/" + AppConfig.APP_VERSION);
+            if (token != null) connection.setRequestProperty("Authorization", "Bearer " + token);
+            if (body != null) {
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+                try (OutputStream output = connection.getOutputStream()) {
+                    output.write(body.toString().getBytes(StandardCharsets.UTF_8));
+                }
+            }
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            String text = read(stream);
+            JSONObject json = text.isEmpty() ? new JSONObject() : new JSONObject(text);
+            if (status >= 400) {
+                throw new ApiException(status, json.optString("error", "요청을 처리하지 못했습니다."));
+            }
+            return json;
+        } finally {
+            connection.disconnect();
+        }
     }
 
     private static String read(InputStream stream) throws IOException {

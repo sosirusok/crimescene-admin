@@ -1,0 +1,17 @@
+Verifies
+Verified using v1 scheme (JAR signing): false
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): false
+Verified using v3.1 scheme (APK Signature Scheme v3.1): false
+Verified using v4 scheme (APK Signature Scheme v4): false
+Verified for SourceStamp: false
+Number of signers: 1
+Signer #1 certificate DN: CN=Crimescene Play Owner App, OU=Seomyeon Branch, O=Crimescene Play, L=Busan, C=KR
+Signer #1 certificate SHA-256 digest: 8ffe7ae6c6c0af50df7547d8867d62f23451dbd75a97685fd2bf85dee9da6974
+Signer #1 certificate SHA-1 digest: d37ddffa984f0cbbac7d19a8fc16ab4fb9dc6a32
+Signer #1 certificate MD5 digest: 920f565e11cdfc8849a08544478610bb
+Signer #1 key algorithm: RSA
+Signer #1 key size (bits): 4096
+Signer #1 public key SHA-256 digest: 14f640cc06638d19aa41e8a90e1e108d3eec94ee5f824a754144856c9029d0df
+Signer #1 public key SHA-1 digest: b0aeb3653032e3a07340bb0cf8636490d05a95ad
+Signer #1 public key MD5 digest: 6fbcff7874d66df06317f683c648bceb

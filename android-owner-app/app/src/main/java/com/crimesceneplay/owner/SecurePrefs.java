@@ -25,6 +25,8 @@ final class SecurePrefs {
     private static final String SYNC_MESSAGE = "sync_message";
     private static final String LAST_SYNC_AT = "last_sync_at";
 
+    private static volatile SecretKey cachedKey;
+
     private final SharedPreferences prefs;
 
     SecurePrefs(Context context) {
@@ -53,7 +55,7 @@ final class SecurePrefs {
                 .putBoolean(INITIAL_SYNC, false)
                 .putInt(POLL_SECONDS, Math.max(15, pollSeconds))
                 .putString(SYNC_STATE, AppConfig.STATE_CONNECTING)
-                .putString(SYNC_MESSAGE, "서버에 연결하는 중")
+                .putString(SYNC_MESSAGE, "예약 알림을 준비하는 중")
                 .putLong(LAST_SYNC_AT, 0L)
                 .apply();
     }
@@ -95,7 +97,7 @@ final class SecurePrefs {
     }
 
     String getSyncMessage() {
-        return prefs.getString(SYNC_MESSAGE, "서버에 연결하는 중");
+        return prefs.getString(SYNC_MESSAGE, "예약 알림을 준비하는 중");
     }
 
     long getLastSyncAt() {
@@ -115,20 +117,34 @@ final class SecurePrefs {
     }
 
     private static SecretKey getOrCreateKey() throws Exception {
-        KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
-        keyStore.load(null);
-        if (keyStore.containsAlias(KEY_ALIAS)) {
-            return ((KeyStore.SecretKeyEntry) keyStore.getEntry(KEY_ALIAS, null)).getSecretKey();
+        SecretKey key = cachedKey;
+        if (key != null) return key;
+
+        synchronized (SecurePrefs.class) {
+            key = cachedKey;
+            if (key != null) return key;
+
+            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+            keyStore.load(null);
+            if (keyStore.containsAlias(KEY_ALIAS)) {
+                key = ((KeyStore.SecretKeyEntry) keyStore.getEntry(KEY_ALIAS, null)).getSecretKey();
+            } else {
+                KeyGenerator generator = KeyGenerator.getInstance(
+                        KeyProperties.KEY_ALGORITHM_AES,
+                        "AndroidKeyStore"
+                );
+                generator.init(new KeyGenParameterSpec.Builder(
+                        KEY_ALIAS,
+                        KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                        .setRandomizedEncryptionRequired(true)
+                        .build());
+                key = generator.generateKey();
+            }
+            cachedKey = key;
+            return key;
         }
-        KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
-        generator.init(new KeyGenParameterSpec.Builder(
-                KEY_ALIAS,
-                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
-                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                .setRandomizedEncryptionRequired(true)
-                .build());
-        return generator.generateKey();
     }
 
     private static String encrypt(String value) throws Exception {

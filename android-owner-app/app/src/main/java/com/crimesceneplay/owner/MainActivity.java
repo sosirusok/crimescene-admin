@@ -1,6 +1,7 @@
 package com.crimesceneplay.owner;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.NotificationChannel;
@@ -105,6 +106,7 @@ public final class MainActivity extends Activity {
         if (prefs.isPaired() && !showingPairScreen) reloadLocal(false);
     }
 
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     @Override
     protected void onStart() {
         super.onStart();

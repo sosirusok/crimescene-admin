@@ -1,0 +1,33 @@
+name: Trigger latest owner app verification
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/trigger-owner-app-final.yml'
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start verification on the latest main branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run build-owner-app-final.yml --repo "$GITHUB_REPOSITORY" --ref main
+
+      - name: Remove this one-time trigger
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repo
+          cd repo
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/trigger-owner-app-final.yml
+          git add -A .github/workflows/trigger-owner-app-final.yml
+          git commit -m 'chore: remove owner app verification trigger'
+          git push origin main

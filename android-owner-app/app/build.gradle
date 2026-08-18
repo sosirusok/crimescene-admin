@@ -12,8 +12,8 @@ android {
         applicationId "com.crimesceneplay.owner"
         minSdk 26
         targetSdk 34
-        versionCode 3
-        versionName "1.1.1"
+        versionCode 4
+        versionName "1.2.0"
     }
 
     def signingFile = rootProject.file("signing.properties")
@@ -32,8 +32,8 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
-            shrinkResources false
+            minifyEnabled true
+            shrinkResources true
             signingConfig signingFile.exists() ? signingConfigs.release : null
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }

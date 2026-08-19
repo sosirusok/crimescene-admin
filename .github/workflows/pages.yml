@@ -10,7 +10,6 @@ on:
       - 'pages-src/shell.html'
       - 'pages-src/build.mjs'
       - 'scripts/smoke-admin.cjs'
-      - 'scripts/apply-owner-feedback.py'
       - 'public/favicon.svg'
   workflow_dispatch:
 
@@ -32,8 +31,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Apply owner feedback
-        run: python3 scripts/apply-owner-feedback.py
       - name: Build admin site
         env:
           PAGES_BASE: /crimescene-admin

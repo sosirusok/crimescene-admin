@@ -10,6 +10,7 @@ on:
       - 'pages-src/shell.html'
       - 'pages-src/build.mjs'
       - 'scripts/smoke-admin.cjs'
+      - 'scripts/apply-owner-feedback.py'
       - 'public/favicon.svg'
   workflow_dispatch:
 
@@ -31,6 +32,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Apply owner feedback
+        run: python3 scripts/apply-owner-feedback.py
       - name: Build admin site
         env:
           PAGES_BASE: /crimescene-admin
@@ -52,6 +55,12 @@ jobs:
           grep -q '온라인 카드 결제 (연동 후 사용)' _site/assets/admin-final.js
           grep -q '카드 승인·취소 모듈' _site/assets/admin-final.js
           grep -q '예약은 결제 연동 없이 바로 확정됩니다' _site/assets/admin-final.js
+          grep -q '고객 사이트 이름' _site/assets/admin-final.js
+          grep -q '사업자 상호' _site/assets/admin-final.js
+          grep -q '(주)싱글' _site/assets/admin-final.js
+          grep -q 'difficulty:""' _site/assets/admin-final.js
+          ! grep -q '난이도 표시' _site/assets/admin-final.js
+          ! grep -q 'current.difficulty' _site/assets/admin-final.js
           ! grep -Eq 'Supabase|OWNER|AES-GCM|서비스 역할' _site/assets/admin-final.js
       - name: Verify management API
         shell: bash
@@ -64,10 +73,15 @@ jobs:
           python3 - <<'PY'
           import json
           data=json.load(open('/tmp/bootstrap.json',encoding='utf-8'))
-          assert data['settings']['paymentMode'] == 'ONSITE'
+          settings=data['settings']
+          assert settings['paymentMode'] == 'ONSITE'
+          assert settings['representativeName'] == '정지훈', settings
+          assert settings['businessRegistrationNumber'] == '744-88-01446', settings
+          assert settings['email'] == 'jjhun65@hanmail.net', settings
           assert data['payment']['onlineEnabled'] is False
           assert data['payment']['integrationReady'] is False
-          print('Payment safety lock verified')
+          assert all(not str(t.get('difficulty') or '').strip() for t in data['themes'])
+          print('Management settings verified')
           PY
           code=$(curl -sS -o /tmp/unauthorized.json -w '%{http_code}' -H "apikey: ${key}" "${api}/admin/dashboard")
           test "$code" = "401"
@@ -113,5 +127,10 @@ jobs:
           grep -q '온라인 카드 결제 (연동 후 사용)' /tmp/admin-final.js
           grep -q '카드 승인·취소 모듈' /tmp/admin-final.js
           grep -q '예약은 결제 연동 없이 바로 확정됩니다' /tmp/admin-final.js
+          grep -q '고객 사이트 이름' /tmp/admin-final.js
+          grep -q '사업자 상호' /tmp/admin-final.js
+          grep -q '(주)싱글' /tmp/admin-final.js
+          ! grep -q '난이도 표시' /tmp/admin-final.js
+          ! grep -q 'current.difficulty' /tmp/admin-final.js
           grep -q 'noindex,nofollow,noarchive' /tmp/admin.html
           echo "Live admin site verified: ${base}"

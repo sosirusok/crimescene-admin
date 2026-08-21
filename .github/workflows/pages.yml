@@ -6,11 +6,14 @@ on:
     paths:
       - '.github/workflows/pages.yml'
       - 'pages-src/admin-final.js'
+      - 'pages-src/admin-date.css'
       - 'pages-src/final.css'
       - 'pages-src/shell.html'
       - 'pages-src/build.mjs'
       - 'scripts/smoke-admin.cjs'
+      - 'scripts/smoke-admin-reservations.cjs'
       - 'public/favicon.svg'
+      - 'public/fonts/**'
   workflow_dispatch:
 
 permissions:
@@ -42,17 +45,26 @@ jobs:
           set -euo pipefail
           test -s _site/index.html
           test -s _site/assets/final.css
+          test -s _site/assets/admin-date.css
           test -s _site/assets/admin-final.js
+          test -s _site/fonts/Pretendard-Regular.woff2
+          test -s _site/fonts/Pretendard-ExtraBold.woff2
           node --check _site/assets/admin-final.js
           node scripts/smoke-admin.cjs
+          node scripts/smoke-admin-reservations.cjs
           grep -q 'admin-final.js?v=' _site/index.html
           grep -q 'final.css?v=' _site/index.html
+          grep -q 'admin-date.css?v=' _site/index.html
+          grep -q 'Pretendard-Regular.woff2' _site/assets/admin-date.css
           grep -q 'noindex,nofollow,noarchive' _site/index.html
           grep -q 'Disallow: /' _site/robots.txt
           grep -q '온라인 카드 결제 (연동 후 사용)' _site/assets/admin-final.js
           grep -q '카드 승인·취소 모듈' _site/assets/admin-final.js
           grep -q '예약은 결제 연동 없이 바로 확정됩니다' _site/assets/admin-final.js
           grep -q '고객 사이트 이름' _site/assets/admin-final.js
+          grep -q '오늘 예약만 보기' _site/assets/admin-final.js
+          grep -q '오늘 이후 전체' _site/assets/admin-final.js
+          grep -q '날짜 직접 선택' _site/assets/admin-final.js
           grep -q '사업자 상호' _site/assets/admin-final.js
           grep -q '(주)싱글' _site/assets/admin-final.js
           grep -q 'difficulty:""' _site/assets/admin-final.js
@@ -71,12 +83,14 @@ jobs:
           import json
           data=json.load(open('/tmp/bootstrap.json',encoding='utf-8'))
           settings=data['settings']
-          assert settings['paymentMode'] == 'ONSITE'
-          assert settings['representativeName'] == '정지훈', settings
-          assert settings['businessRegistrationNumber'] == '744-88-01446', settings
-          assert settings['email'] == 'jjhun65@hanmail.net', settings
-          assert data['payment']['onlineEnabled'] is False
-          assert data['payment']['integrationReady'] is False
+          assert isinstance(settings.get('bookingWindowDays'), int)
+          assert 1 <= settings['bookingWindowDays'] <= 60, settings
+          assert settings.get('paymentMode') in {'ONSITE','ONLINE'}
+          for field in ('storeName','branchName','phone','addressRoad'):
+              assert isinstance(settings.get(field), str) and settings[field].strip(), (field, settings)
+          payment=data.get('payment') or {}
+          assert isinstance(payment.get('onlineEnabled'), bool)
+          assert isinstance(payment.get('integrationReady'), bool)
           assert all(not str(t.get('difficulty') or '').strip() for t in data['themes'])
           print('Management settings verified')
           PY
@@ -115,16 +129,21 @@ jobs:
           test "$ready" = "1"
           script_path=$(grep -oE 'assets/admin-final\.js\?v=[^" ]+' /tmp/admin.html | head -1)
           style_path=$(grep -oE 'assets/final\.css\?v=[^" ]+' /tmp/admin.html | head -1)
+          date_style_path=$(grep -oE 'assets/admin-date\.css\?v=[^" ]+' /tmp/admin.html | head -1)
           test -n "$script_path"
           test -n "$style_path"
+          test -n "$date_style_path"
           curl --retry 4 --retry-all-errors -fsSL "${base}${script_path}" -o /tmp/admin-final.js
           curl --retry 4 --retry-all-errors -fsSL "${base}${style_path}" -o /tmp/final.css
+          curl --retry 4 --retry-all-errors -fsSL "${base}${date_style_path}" -o /tmp/admin-date.css
           node --check /tmp/admin-final.js
           test -s /tmp/final.css
+          test -s /tmp/admin-date.css
           grep -q '온라인 카드 결제 (연동 후 사용)' /tmp/admin-final.js
           grep -q '카드 승인·취소 모듈' /tmp/admin-final.js
           grep -q '예약은 결제 연동 없이 바로 확정됩니다' /tmp/admin-final.js
           grep -q '고객 사이트 이름' /tmp/admin-final.js
+          grep -q '오늘 예약만 보기' /tmp/admin-final.js
           grep -q '사업자 상호' /tmp/admin-final.js
           grep -q '(주)싱글' /tmp/admin-final.js
           ! grep -q '난이도 표시' /tmp/admin-final.js

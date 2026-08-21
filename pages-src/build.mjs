@@ -7,6 +7,7 @@ const source = join(root, "pages-src");
 const output = join(root, "_site");
 const base = process.env.PAGES_BASE ?? "/crimescene";
 const adminOnly = process.env.ADMIN_ONLY === "1";
+const assetVersion = (process.env.GITHUB_SHA || "local").slice(0, 12);
 
 const publicRoutes = [
   ["", "home", "홈"],
@@ -45,6 +46,8 @@ function documentFor(route, title) {
     .replaceAll("{{DESCRIPTION}}", description)
     .replaceAll("{{ROBOTS}}", adminOnly ? "noindex,nofollow,noarchive" : "index,follow,max-image-preview:large")
     .replaceAll("{{OG_IMAGE}}", adminOnly ? "" : `<meta property="og:image" content="${base}/images/hero-evidence-room.webp">`)
+    .replaceAll("{{ASSET_VERSION}}", assetVersion)
+    .replaceAll("{{ADMIN_STYLE}}", adminOnly ? `<link rel="stylesheet" href="${base}/assets/admin-date.css?v=${assetVersion}">` : "")
     .replaceAll("{{SCRIPT}}", scriptName)
     .replaceAll("{{BODY_CLASS}}", adminOnly ? "admin-document" : "customer-document")
     .replaceAll("{{LOADING_TITLE}}", adminOnly ? "크라임씬플레이 서면1호점" : "크라임씬플레이 서면1호점")
@@ -60,6 +63,7 @@ for (const [folderPath, route, title] of routes) {
 }
 
 await cp(join(source, "final.css"), join(output, "assets/final.css"));
+if (adminOnly) await cp(join(source, "admin-date.css"), join(output, "assets/admin-date.css"));
 await cp(join(source, scriptName), join(output, "assets", scriptName));
 execFileSync(process.execPath, ["--check", join(output, "assets", scriptName)], { stdio: "inherit" });
 
@@ -74,6 +78,7 @@ if (!adminOnly) {
 }
 
 await cp(join(root, "public/favicon.svg"), join(output, "favicon.svg"));
+if (adminOnly) await cp(join(root, "public/fonts"), join(output, "fonts"), { recursive: true });
 await writeFile(join(output, ".nojekyll"), "");
 await writeFile(join(output, "robots.txt"), adminOnly ? "User-agent: *\nDisallow: /\n" : "User-agent: *\nAllow: /\n");
 console.log(`Built ${routes.length} ${adminOnly ? "admin" : "customer"} pages in ${output}`);

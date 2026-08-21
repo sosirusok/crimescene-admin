@@ -1,54 +1,46 @@
-# Crime Scene Operations Console · 서면1호점
+# 크라임씬플레이 서면1호점 운영 관리
 
-크라임씬플레이 서면1호점의 독립 관리자 콘솔입니다. GitHub Pages에서 고객 사이트와 분리해 배포하며, 고객 사이트와 동일한 Supabase PostgreSQL 및 Edge Function API를 사용합니다.
+고객 사이트와 분리된 GitHub Pages 관리자 화면입니다. 계정 목록을 만들지 않고 관리자 암호키를 입력하면 서버 서명 세션을 발급받으며, 고객 사이트와 동일한 Supabase 데이터와 Edge Function API를 사용합니다.
 
 ## 운영 화면
 
-- 오늘 예약, 전체 유효 예약, 결제 완료 매출, 오픈룸 모집·진행 가능 현황
-- 예약 검색과 예약·결제 상태 변경
-- 사건·날짜·회차별 오픈룸 그룹과 참여 팀 목록
-- 팀별 예약자, 연락처, 인원, 합류 소개, 결제 상태 확인
-- 예약자가 없는 회차의 운영·중지 전환
-- 사건 제목, 회차 번호, 설명, 난이도, 가격, 이용 시간, 노출 상태 수정
-- 용의자 정원, 탐정 정원, 최소 진행 인원 수정
-- 사건별 시간대 추가·삭제·정렬
-- 고객 문의 답변 메모와 처리 상태 관리
-- 공지 등록·수정·게시·숨김·삭제
+- 오늘 예약을 기본으로 표시하는 날짜별 예약 관리
+- 운영 설정을 따르는 날짜 탭(현재 30일), 직접 날짜 선택, 오늘 이후·지난 예약·최근 예약 범위
+- 날짜별 예약 건수·이용 인원·취소/미방문 집계와 현재 목록 CSV 저장
+- 예약 직접 등록, 예약 정보·상태·결제 상태 변경
+- 사건·날짜·회차별 오픈룸과 참여 팀 확인
+- 회차 운영/중지, 사건 정보·가격·정원·시간대 수정
+- 매장·사업자·결제 준비 설정, 문의·공지·변경 기록 관리
 - 관리자 암호키 변경
-
-## 오픈룸 운영 기준
-
-- 신입생 오티 살인사건: 용의자 4명 + 탐정 최대 4명, 총 8명
-- 산장 살인사건: 용의자 4명 + 탐정 최대 4명, 총 8명
-- 유튜버 살인사건: 용의자 5명 + 탐정 최대 4명, 총 9명
-- 호텔 살인사건: 용의자 5명 + 탐정 최대 4명, 총 9명
-- 1~3명 예약은 오픈룸으로 접수되며 동일 회차의 다른 팀과 합산됩니다.
-- 예약자가 있는 회차는 실수로 운영 중지할 수 없습니다.
-- 현재 예약 인원보다 정원을 작게 줄이는 변경은 데이터베이스에서 거부합니다.
 
 ## 보안
 
-- 관리자 암호키는 원문으로 저장하지 않습니다.
-- 로그인 성공 시 서버 서명 세션을 발급하고 만료·활성 운영자 여부를 매 요청마다 확인합니다.
-- 로그인 반복 실패에는 속도 제한이 적용됩니다.
-- 연락처는 서버에서만 복호화하며 고객 공개 API에는 다른 팀의 개인정보를 반환하지 않습니다.
-- 관리자 페이지에는 `noindex`, `nofollow`, `noarchive`와 전체 크롤링 차단 `robots.txt`가 적용됩니다.
-- 서비스 역할 키와 개인정보 암호화 재료는 브라우저 번들 및 저장소에 포함되지 않습니다.
+- 암호키 원문을 브라우저나 저장소에 보관하지 않습니다.
+- 로그인 성공 후 발급된 만료형 서버 세션으로 관리자 API를 호출합니다.
+- 연락처는 서버에서만 복호화하며 공개 고객 API에는 노출하지 않습니다.
+- 관리자 페이지에는 `noindex`, `nofollow`, `noarchive`와 크롤링 차단 `robots.txt`를 적용합니다.
+- 서비스 역할 키와 개인정보 암호화 재료는 브라우저 번들에 포함하지 않습니다.
 
-## 배포 소스
+## GitHub Pages 배포 소스
 
 ```text
-pages-src/admin-v3.js    관리자 화면과 운영 기능
-pages-src/v3.css         관리자 가독성 및 반응형 보강
-pages-src/build.mjs      독립 관리자 Pages 빌드
-pages-src/shell.html     공통 문서 셸
-.github/workflows/pages.yml
+pages-src/admin-final.js             관리자 화면과 운영 기능
+pages-src/final.css                  공통 디자인
+pages-src/admin-date.css             날짜별 예약·폰트·모바일 보강
+pages-src/build.mjs                  관리자 정적 빌드
+pages-src/shell.html                 HTML 문서 셸
+scripts/smoke-admin.cjs              로그인 화면 검증
+scripts/smoke-admin-reservations.cjs 날짜별 예약 화면 검증
+.github/workflows/pages.yml          빌드·API 검증·GitHub Pages 배포
 ```
 
-로컬 정적 빌드:
+로컬 검증:
 
 ```bash
 PAGES_BASE=/crimescene-admin ADMIN_ONLY=1 node pages-src/build.mjs
+node scripts/smoke-admin.cjs
+node scripts/smoke-admin-reservations.cjs
+node --check _site/assets/admin-final.js
 ```
 
-빌드는 고객용 또는 레거시 JavaScript가 관리자 산출물에 포함되지 않도록 분리하고 `admin-v3.js` 문법 검사를 통과해야 완료됩니다. `main` 반영 후 GitHub Pages 워크플로가 자동 배포합니다.
+`main`에 반영되면 GitHub Actions가 산출물과 관리자 API의 미인증 차단을 검증한 뒤 GitHub Pages에 배포합니다.

@@ -5,12 +5,15 @@
 ## 운영 화면
 
 - 오늘 예약을 기본으로 표시하는 날짜별 예약 관리
-- 운영 설정을 따르는 날짜 탭(현재 30일), 직접 날짜 선택, 오늘 이후·지난 예약·최근 예약 범위
+- 운영 설정의 예약 가능 기간을 따르는 날짜 탭, 직접 날짜 선택, 오늘 이후·지난 예약·최근 예약 범위
 - 날짜별 예약 건수·이용 인원·취소/미방문 집계와 현재 목록 CSV 저장
-- 예약 직접 등록, 예약 정보·상태·결제 상태 변경
+- 예약 직접 등록, 예약 정보·상태 변경과 현장 결제 상태 처리
+- NICEPAY 결제 대기·확인 중·완료·실패 상태, 카드 정보와 매출전표 확인
+- NICEPAY 온라인 결제 상태는 서버 승인·웹훅 결과로만 반영하며 관리자 수동 변경 차단
+- 취소 요청된 NICEPAY 결제만 확인창을 거쳐 전액 취소하고 예약·좌석 상태 자동 반영
 - 사건·날짜·회차별 오픈룸과 참여 팀 확인
 - 회차 운영/중지, 사건 정보·가격·정원·시간대 수정
-- 매장·사업자·결제 준비 설정, 문의·공지·변경 기록 관리
+- 매장·사업자·NICEPAY 결제 준비 설정, 문의·공지·변경 기록 관리
 - 관리자 암호키 변경
 
 ## 보안
@@ -31,6 +34,7 @@ pages-src/build.mjs                  관리자 정적 빌드
 pages-src/shell.html                 HTML 문서 셸
 scripts/smoke-admin.cjs              로그인 화면 검증
 scripts/smoke-admin-reservations.cjs 날짜별 예약 화면 검증
+scripts/smoke-admin-payments.cjs     NICEPAY 상태·잠금·준비 조건 검증
 .github/workflows/pages.yml          빌드·API 검증·GitHub Pages 배포
 ```
 
@@ -40,6 +44,7 @@ scripts/smoke-admin-reservations.cjs 날짜별 예약 화면 검증
 PAGES_BASE=/crimescene-admin ADMIN_ONLY=1 node pages-src/build.mjs
 node scripts/smoke-admin.cjs
 node scripts/smoke-admin-reservations.cjs
+node scripts/smoke-admin-payments.cjs
 node --check _site/assets/admin-final.js
 ```
 

@@ -460,3 +460,28 @@ body {
     grid-column: auto;
   }
 }
+
+/* Responsive reliability — 2026-10-19. */
+.admin-app,
+.admin-login,
+.admin-loading-page,
+.admin-fatal {
+  min-height: 100dvh;
+}
+.admin-modal {
+  max-height: calc(100dvh - 40px);
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 860px) {
+  .admin-sidebar {
+    height: 100dvh;
+    overscroll-behavior: contain;
+  }
+}
+
+@media (max-width: 600px) {
+  .admin-modal {
+    max-height: calc(100dvh - 16px);
+  }
+}

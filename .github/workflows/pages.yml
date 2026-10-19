@@ -13,6 +13,7 @@ on:
       - 'scripts/smoke-admin.cjs'
       - 'scripts/smoke-admin-reservations.cjs'
       - 'scripts/smoke-admin-payments.cjs'
+      - 'scripts/smoke-admin-responsive.cjs'
       - 'public/favicon.svg'
       - 'public/fonts/**'
   workflow_dispatch:
@@ -54,6 +55,7 @@ jobs:
           node scripts/smoke-admin.cjs
           node scripts/smoke-admin-reservations.cjs
           node scripts/smoke-admin-payments.cjs
+          node scripts/smoke-admin-responsive.cjs
           grep -q 'admin-final.js?v=' _site/index.html
           grep -q 'final.css?v=' _site/index.html
           grep -q 'admin-date.css?v=' _site/index.html

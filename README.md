@@ -35,6 +35,7 @@ pages-src/shell.html                 HTML 문서 셸
 scripts/smoke-admin.cjs              로그인 화면 검증
 scripts/smoke-admin-reservations.cjs 날짜별 예약 화면 검증
 scripts/smoke-admin-payments.cjs     NICEPAY 상태·잠금·준비 조건 검증
+scripts/smoke-admin-responsive.cjs   모바일 레이아웃 회귀 검증
 .github/workflows/pages.yml          빌드·API 검증·GitHub Pages 배포
 ```
 
@@ -45,6 +46,7 @@ PAGES_BASE=/crimescene-admin ADMIN_ONLY=1 node pages-src/build.mjs
 node scripts/smoke-admin.cjs
 node scripts/smoke-admin-reservations.cjs
 node scripts/smoke-admin-payments.cjs
+node scripts/smoke-admin-responsive.cjs
 node --check _site/assets/admin-final.js
 ```
 

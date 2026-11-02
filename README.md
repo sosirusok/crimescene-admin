@@ -51,3 +51,7 @@ node --check _site/assets/admin-final.js
 ```
 
 `main`에 반영되면 GitHub Actions가 산출물과 관리자 API의 미인증 차단을 검증한 뒤 GitHub Pages에 배포합니다.
+
+## 예약 알림 앱
+
+`android-owner-app/`에는 새 예약과 예약 취소를 휴대폰 알림으로 받는 사장님용 안드로이드 앱 소스와 서명된 APK(`dist/`)가 있습니다. 설치와 사용 방법은 `android-owner-app/README.md`에 있습니다.

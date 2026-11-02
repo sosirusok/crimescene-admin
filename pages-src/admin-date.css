@@ -461,7 +461,7 @@ body {
   }
 }
 
-/* Responsive reliability — 2026-10-19. */
+/* Full-height layout, modal scrolling and busy state. */
 .admin-app,
 .admin-login,
 .admin-loading-page,
@@ -501,7 +501,7 @@ body {
   }
 }
 
-/* Layout fixes — 2026-10-19 audit. */
+/* Text wrapping and button sizing in cards and lists. */
 .admin-notice-layout {
   align-items: start;
 }

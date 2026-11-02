@@ -1,6 +1,6 @@
 const fs=require("node:fs");
 
-// Static guards for the mobile layout regressions fixed on 2026-10-19. Run after the admin build.
+// Static checks for the admin mobile layout. Run after the admin build.
 const read=file=>fs.readFileSync(`_site/${file}`,"utf8");
 const fail=message=>{throw new Error(message);};
 // Formatting-insensitive CSS: no comments, single spaces, no spaces around { } ; , > or after :, no trailing ;.
